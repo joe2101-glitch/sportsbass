@@ -1,0 +1,40 @@
+# .github/workflows/update-data.yml
+# Runs daily at 6 AM UTC (before EPL matchdays) and 5 PM UTC (before NHL games)
+
+name: Update SportsBass Data
+
+on:
+  schedule:
+    - cron: '0 6 * * *'   # 6 AM UTC daily (EPL)
+    - cron: '0 17 * * *'  # 5 PM UTC daily (NHL pre-game)
+  workflow_dispatch: {}     # Manual trigger
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install deps
+        run: pip install requests numpy scipy
+      
+      - name: Run NHL pipeline
+        run: python update_data.py --nhl-only
+      
+      - name: Run EPL pipeline
+        if: env.EPL_API_KEY != ''
+        env:
+          EPL_API_KEY: ${{ secrets.EPL_API_KEY }}
+        run: python update_data.py --epl-only --epl-key $EPL_API_KEY
+      
+      - name: Commit & push
+        run: |
+          git config user.name "SportsBass Bot"
+          git config user.email "bot@sportsbass.ai"
+          git add nhl_data.json epl_data.json 2>/dev/null || true
+          git diff --staged --quiet || git commit -m "📊 Daily data update $(date -u +%Y-%m-%d)"
+          git push
